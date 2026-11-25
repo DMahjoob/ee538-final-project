@@ -39,3 +39,7 @@ if(BUILD_TESTING)
     project_warnings(quant_error_tests)
     add_test(NAME quant_error COMMAND quant_error_tests)
 endif()
+
+add_executable(quant_error_analysis tools/quant_error_analysis.cpp)
+target_link_libraries(quant_error_analysis PRIVATE quantizer)
+project_warnings(quant_error_analysis)
