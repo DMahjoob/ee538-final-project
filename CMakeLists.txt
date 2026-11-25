@@ -20,3 +20,16 @@ function(project_warnings target)
 endfunction()
 
 # Each component adds its library, tests and tools below.
+
+# --- Quantization (Darius) ---------------------------------------------------
+add_library(quantizer src/Quantizer.cpp)
+target_include_directories(quantizer PUBLIC include)
+project_warnings(quantizer)
+
+if(BUILD_TESTING)
+    add_executable(quantizer_tests tests/quantizer_tests.cpp)
+    target_include_directories(quantizer_tests PRIVATE tests)
+    target_link_libraries(quantizer_tests PRIVATE quantizer)
+    project_warnings(quantizer_tests)
+    add_test(NAME quantizer COMMAND quantizer_tests)
+endif()
