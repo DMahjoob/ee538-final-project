@@ -22,7 +22,7 @@ endfunction()
 # Each component adds its library, tests and tools below.
 
 # --- Quantization (Darius) ---------------------------------------------------
-add_library(quantizer src/Quantizer.cpp)
+add_library(quantizer src/Quantizer.cpp src/QuantError.cpp)
 target_include_directories(quantizer PUBLIC include)
 project_warnings(quantizer)
 
@@ -32,4 +32,10 @@ if(BUILD_TESTING)
     target_link_libraries(quantizer_tests PRIVATE quantizer)
     project_warnings(quantizer_tests)
     add_test(NAME quantizer COMMAND quantizer_tests)
+
+    add_executable(quant_error_tests tests/quant_error_tests.cpp)
+    target_include_directories(quant_error_tests PRIVATE tests)
+    target_link_libraries(quant_error_tests PRIVATE quantizer)
+    project_warnings(quant_error_tests)
+    add_test(NAME quant_error COMMAND quant_error_tests)
 endif()
