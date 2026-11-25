@@ -67,4 +67,32 @@ std::int8_t Quantizer::quantize_value(float x, float scale) {
     return static_cast<std::int8_t>(clamped);
 }
 
+std::vector<float> Quantizer::dequantize(const QuantizedTensor& q) {
+    std::vector<float> out(q.values.size());
+    for (std::size_t i = 0; i < q.values.size(); ++i) {
+        out[i] = static_cast<float>(q.values[i]) * q.scale;
+    }
+    return out;
+}
+
+std::vector<float> Quantizer::dequantize_accumulator(
+    const std::vector<std::int32_t>& acc, float scale_x, float scale_w) {
+    require_valid_scale(scale_x);
+    require_valid_scale(scale_w);
+    const double combined = static_cast<double>(scale_x) * scale_w;
+    std::vector<float> out(acc.size());
+    for (std::size_t i = 0; i < acc.size(); ++i) {
+        out[i] = static_cast<float>(static_cast<double>(acc[i]) * combined);
+    }
+    return out;
+}
+
+void Quantizer::check_inner_dim(std::size_t k) {
+    if (k > max_safe_inner_dim()) {
+        throw std::invalid_argument(
+            "inner dimension " + std::to_string(k) +
+            " exceeds INT32-safe limit " + std::to_string(max_safe_inner_dim()));
+    }
+}
+
 }  // namespace qlinear

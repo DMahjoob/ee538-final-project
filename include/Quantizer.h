@@ -41,6 +41,25 @@ public:
 
     // Rounds half away from zero, then saturates to [-127, 127].
     static std::int8_t quantize_value(float x, float scale);
+
+    // x_hat = q * scale.
+    static std::vector<float> dequantize(const QuantizedTensor& q);
+
+    // Converts the INT32 output of an INT8 kernel back to float:
+    // y_hat[i] = acc[i] * scale_x * scale_w. The product is formed in double
+    // because |acc| can exceed float's 24-bit exact-integer range.
+    static std::vector<float> dequantize_accumulator(
+        const std::vector<std::int32_t>& acc, float scale_x, float scale_w);
+
+    // Largest inner dimension K for which a sum of K products of two values
+    // in [-127, 127] is guaranteed to fit in int32: floor(INT32_MAX / 127^2).
+    static constexpr std::size_t max_safe_inner_dim() {
+        return static_cast<std::size_t>(INT32_MAX) /
+               static_cast<std::size_t>(kQMax * kQMax);
+    }
+
+    // Throws std::invalid_argument if K could overflow the INT32 accumulator.
+    static void check_inner_dim(std::size_t k);
 };
 
 }  // namespace qlinear

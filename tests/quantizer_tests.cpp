@@ -86,11 +86,67 @@ void add_quantize_tests(test::Runner& tests) {
     });
 }
 
+void add_dequantize_tests(test::Runner& tests) {
+    tests.add("round trip error is at most scale / 2 per element", [] {
+        std::vector<float> data;
+        for (int i = -200; i <= 200; ++i) {
+            data.push_back(static_cast<float>(i) * 0.0173f);
+        }
+        const QuantizedTensor q = Quantizer().quantize(data);
+        const std::vector<float> back = Quantizer::dequantize(q);
+        CHECK(back.size() == data.size());
+        for (std::size_t i = 0; i < data.size(); ++i) {
+            CHECK(std::fabs(back[i] - data[i]) <= q.scale * 0.5f + 1e-6f);
+        }
+    });
+
+    tests.add("accumulator dequantization applies scale_x * scale_w", [] {
+        // x = [1, 2], w = [3, -4]  ->  x . w = -5
+        const std::vector<float> x = {1.0f, 2.0f};
+        const std::vector<float> w = {3.0f, -4.0f};
+        Quantizer quantizer;
+        const QuantizedTensor qx = quantizer.quantize(x);
+        const QuantizedTensor qw = quantizer.quantize(w);
+        std::int32_t acc = 0;
+        for (std::size_t i = 0; i < x.size(); ++i) {
+            acc += static_cast<std::int32_t>(qx.values[i]) * qw.values[i];
+        }
+        const std::vector<float> y =
+            Quantizer::dequantize_accumulator({acc}, qx.scale, qw.scale);
+        CHECK_NEAR(y[0], -5.0f, 0.05f);
+    });
+
+    tests.add("accumulator dequantization keeps precision for large int32", [] {
+        const std::int32_t big = 2'000'000'001;  // not representable in float
+        const std::vector<float> y =
+            Quantizer::dequantize_accumulator({big, -big, 0}, 0.5f, 0.25f);
+        CHECK_NEAR(y[0], 250'000'000.125, 32.0);
+        CHECK(y[1] == -y[0]);
+        CHECK(y[2] == 0.0f);
+    });
+
+    tests.add("accumulator dequantization rejects bad scales", [] {
+        CHECK_THROWS(Quantizer::dequantize_accumulator({1}, 0.0f, 1.0f),
+                     std::invalid_argument);
+    });
+
+    tests.add("max safe inner dim keeps worst case inside int32", [] {
+        const std::size_t k = Quantizer::max_safe_inner_dim();
+        CHECK(k == 133144);
+        const std::int64_t worst = static_cast<std::int64_t>(k) * 127 * 127;
+        CHECK(worst <= std::numeric_limits<std::int32_t>::max());
+        CHECK((worst + 127 * 127) > std::numeric_limits<std::int32_t>::max());
+        Quantizer::check_inner_dim(k);  // must not throw
+        CHECK_THROWS(Quantizer::check_inner_dim(k + 1), std::invalid_argument);
+    });
+}
+
 }  // namespace
 
 int main() {
     test::Runner tests;
     add_scale_tests(tests);
     add_quantize_tests(tests);
+    add_dequantize_tests(tests);
     return tests.run();
 }
