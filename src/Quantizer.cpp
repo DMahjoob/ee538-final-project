@@ -32,7 +32,27 @@ float max_abs(const std::vector<float>& data) {
     return result;
 }
 
+// P-th percentile of |x| using the nearest-rank method.
+float abs_percentile(const std::vector<float>& data, double percentile) {
+    std::vector<float> mags(data.size());
+    std::transform(data.begin(), data.end(), mags.begin(),
+                   [](float x) { return std::fabs(x); });
+    const double rank = std::ceil(percentile / 100.0 * static_cast<double>(mags.size()));
+    const std::size_t idx =
+        std::min(mags.size() - 1, static_cast<std::size_t>(std::max(rank, 1.0)) - 1);
+    std::nth_element(mags.begin(), mags.begin() + static_cast<std::ptrdiff_t>(idx),
+                     mags.end());
+    return mags[idx];
+}
+
 }  // namespace
+
+Quantizer::Quantizer(ScaleMethod method, double percentile)
+    : method_(method), percentile_(percentile) {
+    if (!(percentile > 0.0 && percentile <= 100.0)) {
+        throw std::invalid_argument("Quantizer: percentile must be in (0, 100]");
+    }
+}
 
 float Quantizer::compute_scale(const std::vector<float>& data) const {
     require_finite(data);
@@ -40,7 +60,16 @@ float Quantizer::compute_scale(const std::vector<float>& data) const {
     if (amax == 0.0f) {
         return 1.0f;
     }
-    return amax / static_cast<float>(kQMax);
+    float clip = amax;
+    if (method_ == ScaleMethod::Percentile) {
+        clip = abs_percentile(data, percentile_);
+        // A mostly-zero tensor can have a zero percentile; fall back to max|x|
+        // rather than collapsing every nonzero value to saturation.
+        if (clip == 0.0f) {
+            clip = amax;
+        }
+    }
+    return clip / static_cast<float>(kQMax);
 }
 
 QuantizedTensor Quantizer::quantize(const std::vector<float>& data) const {

@@ -22,12 +22,27 @@ struct QuantizedTensor {
     float scale = 1.0f;
 };
 
+enum class ScaleMethod {
+    // s = max|x| / 127. Lossless range, but one outlier stretches the grid.
+    MaxAbs,
+    // s = P-th percentile of |x| / 127. Values above it saturate, trading a
+    // few large errors for finer resolution on the bulk of the distribution.
+    Percentile,
+};
+
 class Quantizer {
 public:
     Quantizer() = default;
 
-    // Scale such that the largest |x| maps to 127. An all-zero tensor gets
-    // scale 1.0 so that quantization never divides by zero.
+    // percentile is in (0, 100] and only used by ScaleMethod::Percentile.
+    // Throws std::invalid_argument if it is out of range.
+    explicit Quantizer(ScaleMethod method, double percentile = 99.9);
+
+    ScaleMethod method() const { return method_; }
+    double percentile() const { return percentile_; }
+
+    // Scale such that the chosen clipping value maps to 127. An all-zero
+    // tensor gets scale 1.0 so that quantization never divides by zero.
     // Throws std::invalid_argument on NaN or infinite input.
     float compute_scale(const std::vector<float>& data) const;
 
@@ -60,6 +75,10 @@ public:
 
     // Throws std::invalid_argument if K could overflow the INT32 accumulator.
     static void check_inner_dim(std::size_t k);
+
+private:
+    ScaleMethod method_ = ScaleMethod::MaxAbs;
+    double percentile_ = 100.0;
 };
 
 }  // namespace qlinear

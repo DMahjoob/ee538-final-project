@@ -8,6 +8,7 @@
 
 using qlinear::Quantizer;
 using qlinear::QuantizedTensor;
+using qlinear::ScaleMethod;
 
 namespace {
 
@@ -141,6 +142,49 @@ void add_dequantize_tests(test::Runner& tests) {
     });
 }
 
+void add_outlier_tests(test::Runner& tests) {
+    // 999 values in [-1, 1] plus one outlier at 100.
+    auto outlier_data = [] {
+        std::vector<float> data;
+        for (int i = 0; i < 999; ++i) {
+            data.push_back(static_cast<float>(i % 201 - 100) / 100.0f);
+        }
+        data.push_back(100.0f);
+        return data;
+    };
+
+    tests.add("max-abs scale is stretched by a single outlier", [=] {
+        const float scale = Quantizer().compute_scale(outlier_data());
+        CHECK_NEAR(scale, 100.0f / 127.0f, 1e-6f);
+    });
+
+    tests.add("percentile scale ignores the outlier and saturates it", [=] {
+        Quantizer quantizer(ScaleMethod::Percentile, 99.0);
+        const std::vector<float> data = outlier_data();
+        const QuantizedTensor q = quantizer.quantize(data);
+        CHECK(q.scale <= 1.0f / 127.0f + 1e-6f);
+        CHECK(q.values.back() == 127);
+    });
+
+    tests.add("percentile 100 matches max-abs", [=] {
+        const std::vector<float> data = outlier_data();
+        CHECK(Quantizer(ScaleMethod::Percentile, 100.0).compute_scale(data) ==
+              Quantizer().compute_scale(data));
+    });
+
+    tests.add("sparse tensor falls back to max-abs when percentile is zero", [] {
+        std::vector<float> data(1000, 0.0f);
+        data[3] = 2.0f;
+        const float scale = Quantizer(ScaleMethod::Percentile, 99.0).compute_scale(data);
+        CHECK_NEAR(scale, 2.0f / 127.0f, 1e-7f);
+    });
+
+    tests.add("invalid percentile is rejected", [] {
+        CHECK_THROWS(Quantizer(ScaleMethod::Percentile, 0.0), std::invalid_argument);
+        CHECK_THROWS(Quantizer(ScaleMethod::Percentile, 100.5), std::invalid_argument);
+    });
+}
+
 }  // namespace
 
 int main() {
@@ -148,5 +192,6 @@ int main() {
     add_scale_tests(tests);
     add_quantize_tests(tests);
     add_dequantize_tests(tests);
+    add_outlier_tests(tests);
     return tests.run();
 }
