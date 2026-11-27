@@ -1,0 +1,3 @@
+# Exact float32 result of X * W^T for the golden example
+1 2
+-1.5 -1.5
