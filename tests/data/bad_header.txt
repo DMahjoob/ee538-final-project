@@ -1,0 +1,4 @@
+# header has a non-integer column count
+2 x
+1 2
+3 4

@@ -2,3 +2,5 @@ build/
 *.dSYM/
 .DS_Store
 results/*.csv
+build-*/
+__pycache__/

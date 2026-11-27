@@ -1,0 +1,4 @@
+# Golden example from the proposal: W = [[0.5, 1], [-1, 0.25]]
+2 2
+0.5 1
+-1 0.25
